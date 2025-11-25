@@ -8,20 +8,23 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Calculator as CalcIcon, Timer, ArrowRightLeft, FileText, FolderOpen, Play, Pause, RotateCcw, Save, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 
 interface SavedNote {
-  id: string
+  id: number
   title: string
   content: string
-  timestamp: Date
+  timestamp: string
+  createdAt: string
 }
 
 interface SavedFile {
-  id: string
+  id: number
   name: string
   category: string
   size: string
-  timestamp: Date
+  timestamp: string
+  createdAt: string
 }
 
 export default function ToolsPage() {
@@ -48,20 +51,50 @@ export default function ToolsPage() {
   const [noteTitle, setNoteTitle] = useState("")
   const [noteContent, setNoteContent] = useState("")
   const [savedNotes, setSavedNotes] = useState<SavedNote[]>([])
+  const [notesLoading, setNotesLoading] = useState(true)
 
   // File Organizer State
   const [fileName, setFileName] = useState("")
   const [fileCategory, setFileCategory] = useState("Documents")
   const [fileSize, setFileSize] = useState("")
   const [savedFiles, setSavedFiles] = useState<SavedFile[]>([])
+  const [filesLoading, setFilesLoading] = useState(true)
 
-  // Load saved data
+  // Load saved data from API
   useEffect(() => {
-    const notes = localStorage.getItem("savedNotes")
-    const files = localStorage.getItem("savedFiles")
-    if (notes) setSavedNotes(JSON.parse(notes))
-    if (files) setSavedFiles(JSON.parse(files))
+    fetchNotes()
+    fetchFiles()
   }, [])
+
+  const fetchNotes = async () => {
+    try {
+      setNotesLoading(true)
+      const response = await fetch("/api/tool-notes?limit=100")
+      if (response.ok) {
+        const data = await response.json()
+        setSavedNotes(data)
+      }
+    } catch (error) {
+      toast.error("Failed to load notes")
+    } finally {
+      setNotesLoading(false)
+    }
+  }
+
+  const fetchFiles = async () => {
+    try {
+      setFilesLoading(true)
+      const response = await fetch("/api/tool-files?limit=100")
+      if (response.ok) {
+        const data = await response.json()
+        setSavedFiles(data)
+      }
+    } catch (error) {
+      toast.error("Failed to load files")
+    } finally {
+      setFilesLoading(false)
+    }
+  }
 
   // Calculator Functions
   const handleNumberClick = (num: string) => {
@@ -193,50 +226,86 @@ export default function ToolsPage() {
   }, [fromValue, fromUnit, toUnit, converterType])
 
   // Note Functions
-  const saveNote = () => {
+  const saveNote = async () => {
     if (noteTitle.trim() && noteContent.trim()) {
-      const newNote: SavedNote = {
-        id: Date.now().toString(),
-        title: noteTitle,
-        content: noteContent,
-        timestamp: new Date()
+      try {
+        const response = await fetch("/api/tool-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: noteTitle,
+            content: noteContent
+          })
+        })
+        if (response.ok) {
+          const newNote = await response.json()
+          setSavedNotes([newNote, ...savedNotes])
+          setNoteTitle("")
+          setNoteContent("")
+          toast.success("Note saved")
+        } else {
+          toast.error("Failed to save note")
+        }
+      } catch (error) {
+        toast.error("Failed to save note")
       }
-      const updated = [newNote, ...savedNotes]
-      setSavedNotes(updated)
-      localStorage.setItem("savedNotes", JSON.stringify(updated))
-      setNoteTitle("")
-      setNoteContent("")
     }
   }
 
-  const deleteNote = (id: string) => {
-    const updated = savedNotes.filter(note => note.id !== id)
-    setSavedNotes(updated)
-    localStorage.setItem("savedNotes", JSON.stringify(updated))
+  const deleteNote = async (id: number) => {
+    try {
+      const response = await fetch(`/api/tool-notes?id=${id}`, { method: "DELETE" })
+      if (response.ok) {
+        setSavedNotes(savedNotes.filter(note => note.id !== id))
+        toast.success("Note deleted")
+      } else {
+        toast.error("Failed to delete note")
+      }
+    } catch (error) {
+      toast.error("Failed to delete note")
+    }
   }
 
   // File Functions
-  const saveFile = () => {
+  const saveFile = async () => {
     if (fileName.trim()) {
-      const newFile: SavedFile = {
-        id: Date.now().toString(),
-        name: fileName,
-        category: fileCategory,
-        size: fileSize || "N/A",
-        timestamp: new Date()
+      try {
+        const response = await fetch("/api/tool-files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: fileName,
+            category: fileCategory,
+            size: fileSize || "N/A"
+          })
+        })
+        if (response.ok) {
+          const newFile = await response.json()
+          setSavedFiles([newFile, ...savedFiles])
+          setFileName("")
+          setFileSize("")
+          toast.success("File saved")
+        } else {
+          toast.error("Failed to save file")
+        }
+      } catch (error) {
+        toast.error("Failed to save file")
       }
-      const updated = [newFile, ...savedFiles]
-      setSavedFiles(updated)
-      localStorage.setItem("savedFiles", JSON.stringify(updated))
-      setFileName("")
-      setFileSize("")
     }
   }
 
-  const deleteFile = (id: string) => {
-    const updated = savedFiles.filter(file => file.id !== id)
-    setSavedFiles(updated)
-    localStorage.setItem("savedFiles", JSON.stringify(updated))
+  const deleteFile = async (id: number) => {
+    try {
+      const response = await fetch(`/api/tool-files?id=${id}`, { method: "DELETE" })
+      if (response.ok) {
+        setSavedFiles(savedFiles.filter(file => file.id !== id))
+        toast.success("File deleted")
+      } else {
+        toast.error("Failed to delete file")
+      }
+    } catch (error) {
+      toast.error("Failed to delete file")
+    }
   }
 
   return (
@@ -502,7 +571,9 @@ export default function ToolsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                    {savedNotes.length === 0 ? (
+                    {notesLoading ? (
+                      <p className="text-muted-foreground text-center py-8">Loading notes...</p>
+                    ) : savedNotes.length === 0 ? (
                       <p className="text-muted-foreground text-center py-8">No saved notes yet</p>
                     ) : (
                       savedNotes.map((note) => (
@@ -577,7 +648,9 @@ export default function ToolsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                    {savedFiles.length === 0 ? (
+                    {filesLoading ? (
+                      <p className="text-muted-foreground text-center py-8">Loading files...</p>
+                    ) : savedFiles.length === 0 ? (
                       <p className="text-muted-foreground text-center py-8">No file references yet</p>
                     ) : (
                       savedFiles.map((file) => (

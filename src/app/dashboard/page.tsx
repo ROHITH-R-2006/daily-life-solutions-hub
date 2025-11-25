@@ -8,157 +8,313 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Plus, Trash2, CheckCircle2, Circle, ExternalLink, Bookmark } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 
 interface Task {
-  id: string
+  id: number
   text: string
   completed: boolean
   priority: "high" | "medium" | "low"
+  createdAt: string
 }
 
 interface Note {
-  id: string
+  id: number
   content: string
-  timestamp: Date
+  timestamp: string
+  createdAt: string
 }
 
 interface Habit {
-  id: string
+  id: number
   name: string
   streak: number
   checkedToday: boolean
+  createdAt: string
 }
 
 interface Bookmark {
-  id: string
+  id: number
   title: string
   url: string
   category: string
+  createdAt: string
 }
 
 export default function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [newTask, setNewTask] = useState("")
   const [taskPriority, setTaskPriority] = useState<"high" | "medium" | "low">("medium")
+  const [tasksLoading, setTasksLoading] = useState(true)
   
   const [notes, setNotes] = useState<Note[]>([])
   const [newNote, setNewNote] = useState("")
+  const [notesLoading, setNotesLoading] = useState(true)
   
   const [habits, setHabits] = useState<Habit[]>([])
   const [newHabit, setNewHabit] = useState("")
+  const [habitsLoading, setHabitsLoading] = useState(true)
   
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([])
   const [newBookmark, setNewBookmark] = useState({ title: "", url: "", category: "" })
+  const [bookmarksLoading, setBookmarksLoading] = useState(true)
 
-  // Load from localStorage
+  // Fetch data from API
   useEffect(() => {
-    const savedTasks = localStorage.getItem("tasks")
-    const savedNotes = localStorage.getItem("notes")
-    const savedHabits = localStorage.getItem("habits")
-    const savedBookmarks = localStorage.getItem("bookmarks")
-    
-    if (savedTasks) setTasks(JSON.parse(savedTasks))
-    if (savedNotes) setNotes(JSON.parse(savedNotes))
-    if (savedHabits) setHabits(JSON.parse(savedHabits))
-    if (savedBookmarks) setBookmarks(JSON.parse(savedBookmarks))
+    fetchTasks()
+    fetchNotes()
+    fetchHabits()
+    fetchBookmarks()
   }, [])
 
-  // Save to localStorage
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks))
-  }, [tasks])
-
-  useEffect(() => {
-    localStorage.setItem("notes", JSON.stringify(notes))
-  }, [notes])
-
-  useEffect(() => {
-    localStorage.setItem("habits", JSON.stringify(habits))
-  }, [habits])
-
-  useEffect(() => {
-    localStorage.setItem("bookmarks", JSON.stringify(bookmarks))
-  }, [bookmarks])
-
-  // Task Management
-  const addTask = () => {
-    if (newTask.trim()) {
-      setTasks([...tasks, {
-        id: Date.now().toString(),
-        text: newTask,
-        completed: false,
-        priority: taskPriority
-      }])
-      setNewTask("")
+  const fetchTasks = async () => {
+    try {
+      setTasksLoading(true)
+      const response = await fetch("/api/tasks?limit=100")
+      if (response.ok) {
+        const data = await response.json()
+        setTasks(data)
+      }
+    } catch (error) {
+      toast.error("Failed to load tasks")
+    } finally {
+      setTasksLoading(false)
     }
   }
 
-  const toggleTask = (id: string) => {
-    setTasks(tasks.map(task => 
-      task.id === id ? { ...task, completed: !task.completed } : task
-    ))
+  const fetchNotes = async () => {
+    try {
+      setNotesLoading(true)
+      const response = await fetch("/api/dashboard-notes?limit=100")
+      if (response.ok) {
+        const data = await response.json()
+        setNotes(data)
+      }
+    } catch (error) {
+      toast.error("Failed to load notes")
+    } finally {
+      setNotesLoading(false)
+    }
   }
 
-  const deleteTask = (id: string) => {
-    setTasks(tasks.filter(task => task.id !== id))
+  const fetchHabits = async () => {
+    try {
+      setHabitsLoading(true)
+      const response = await fetch("/api/habits?limit=100")
+      if (response.ok) {
+        const data = await response.json()
+        setHabits(data)
+      }
+    } catch (error) {
+      toast.error("Failed to load habits")
+    } finally {
+      setHabitsLoading(false)
+    }
+  }
+
+  const fetchBookmarks = async () => {
+    try {
+      setBookmarksLoading(true)
+      const response = await fetch("/api/bookmarks?limit=100")
+      if (response.ok) {
+        const data = await response.json()
+        setBookmarks(data)
+      }
+    } catch (error) {
+      toast.error("Failed to load bookmarks")
+    } finally {
+      setBookmarksLoading(false)
+    }
+  }
+
+  // Task Management
+  const addTask = async () => {
+    if (newTask.trim()) {
+      try {
+        const response = await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: newTask,
+            completed: false,
+            priority: taskPriority
+          })
+        })
+        if (response.ok) {
+          const task = await response.json()
+          setTasks([task, ...tasks])
+          setNewTask("")
+          toast.success("Task added")
+        } else {
+          toast.error("Failed to add task")
+        }
+      } catch (error) {
+        toast.error("Failed to add task")
+      }
+    }
+  }
+
+  const toggleTask = async (id: number) => {
+    const task = tasks.find(t => t.id === id)
+    if (!task) return
+
+    try {
+      const response = await fetch(`/api/tasks?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ completed: !task.completed })
+      })
+      if (response.ok) {
+        const updatedTask = await response.json()
+        setTasks(tasks.map(t => t.id === id ? updatedTask : t))
+      } else {
+        toast.error("Failed to update task")
+      }
+    } catch (error) {
+      toast.error("Failed to update task")
+    }
+  }
+
+  const deleteTask = async (id: number) => {
+    try {
+      const response = await fetch(`/api/tasks?id=${id}`, { method: "DELETE" })
+      if (response.ok) {
+        setTasks(tasks.filter(task => task.id !== id))
+        toast.success("Task deleted")
+      } else {
+        toast.error("Failed to delete task")
+      }
+    } catch (error) {
+      toast.error("Failed to delete task")
+    }
   }
 
   // Notes
-  const addNote = () => {
+  const addNote = async () => {
     if (newNote.trim()) {
-      setNotes([{ id: Date.now().toString(), content: newNote, timestamp: new Date() }, ...notes])
-      setNewNote("")
+      try {
+        const response = await fetch("/api/dashboard-notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: newNote })
+        })
+        if (response.ok) {
+          const note = await response.json()
+          setNotes([note, ...notes])
+          setNewNote("")
+          toast.success("Note added")
+        } else {
+          toast.error("Failed to add note")
+        }
+      } catch (error) {
+        toast.error("Failed to add note")
+      }
     }
   }
 
-  const deleteNote = (id: string) => {
-    setNotes(notes.filter(note => note.id !== id))
+  const deleteNote = async (id: number) => {
+    try {
+      const response = await fetch(`/api/dashboard-notes?id=${id}`, { method: "DELETE" })
+      if (response.ok) {
+        setNotes(notes.filter(note => note.id !== id))
+        toast.success("Note deleted")
+      } else {
+        toast.error("Failed to delete note")
+      }
+    } catch (error) {
+      toast.error("Failed to delete note")
+    }
   }
 
   // Habits
-  const addHabit = () => {
+  const addHabit = async () => {
     if (newHabit.trim()) {
-      setHabits([...habits, {
-        id: Date.now().toString(),
-        name: newHabit,
-        streak: 0,
-        checkedToday: false
-      }])
-      setNewHabit("")
+      try {
+        const response = await fetch("/api/habits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: newHabit })
+        })
+        if (response.ok) {
+          const habit = await response.json()
+          setHabits([...habits, habit])
+          setNewHabit("")
+          toast.success("Habit added")
+        } else {
+          toast.error("Failed to add habit")
+        }
+      } catch (error) {
+        toast.error("Failed to add habit")
+      }
     }
   }
 
-  const toggleHabit = (id: string) => {
-    setHabits(habits.map(habit => {
-      if (habit.id === id) {
-        const newChecked = !habit.checkedToday
-        return {
-          ...habit,
-          checkedToday: newChecked,
-          streak: newChecked ? habit.streak + 1 : Math.max(0, habit.streak - 1)
-        }
+  const toggleHabit = async (id: number) => {
+    try {
+      const response = await fetch(`/api/habits/toggle?id=${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" }
+      })
+      if (response.ok) {
+        const updatedHabit = await response.json()
+        setHabits(habits.map(h => h.id === id ? updatedHabit : h))
+      } else {
+        toast.error("Failed to update habit")
       }
-      return habit
-    }))
+    } catch (error) {
+      toast.error("Failed to update habit")
+    }
   }
 
-  const deleteHabit = (id: string) => {
-    setHabits(habits.filter(habit => habit.id !== id))
+  const deleteHabit = async (id: number) => {
+    try {
+      const response = await fetch(`/api/habits?id=${id}`, { method: "DELETE" })
+      if (response.ok) {
+        setHabits(habits.filter(habit => habit.id !== id))
+        toast.success("Habit deleted")
+      } else {
+        toast.error("Failed to delete habit")
+      }
+    } catch (error) {
+      toast.error("Failed to delete habit")
+    }
   }
 
   // Bookmarks
-  const addBookmark = () => {
+  const addBookmark = async () => {
     if (newBookmark.title.trim() && newBookmark.url.trim()) {
-      setBookmarks([...bookmarks, {
-        id: Date.now().toString(),
-        ...newBookmark
-      }])
-      setNewBookmark({ title: "", url: "", category: "" })
+      try {
+        const response = await fetch("/api/bookmarks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newBookmark)
+        })
+        if (response.ok) {
+          const bookmark = await response.json()
+          setBookmarks([bookmark, ...bookmarks])
+          setNewBookmark({ title: "", url: "", category: "" })
+          toast.success("Bookmark added")
+        } else {
+          toast.error("Failed to add bookmark")
+        }
+      } catch (error) {
+        toast.error("Failed to add bookmark")
+      }
     }
   }
 
-  const deleteBookmark = (id: string) => {
-    setBookmarks(bookmarks.filter(bookmark => bookmark.id !== id))
+  const deleteBookmark = async (id: number) => {
+    try {
+      const response = await fetch(`/api/bookmarks?id=${id}`, { method: "DELETE" })
+      if (response.ok) {
+        setBookmarks(bookmarks.filter(bookmark => bookmark.id !== id))
+        toast.success("Bookmark deleted")
+      } else {
+        toast.error("Failed to delete bookmark")
+      }
+    } catch (error) {
+      toast.error("Failed to delete bookmark")
+    }
   }
 
   const getPriorityColor = (priority: string) => {
@@ -211,7 +367,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {tasks.length === 0 ? (
+                {tasksLoading ? (
+                  <p className="text-muted-foreground text-center py-8">Loading tasks...</p>
+                ) : tasks.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No tasks yet. Add one to get started!</p>
                 ) : (
                   tasks.map((task) => (
@@ -265,7 +423,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {notes.length === 0 ? (
+                {notesLoading ? (
+                  <p className="text-muted-foreground text-center py-8">Loading notes...</p>
+                ) : notes.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No notes yet. Start writing!</p>
                 ) : (
                   notes.map((note) => (
@@ -313,7 +473,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {habits.length === 0 ? (
+                {habitsLoading ? (
+                  <p className="text-muted-foreground text-center py-8">Loading habits...</p>
+                ) : habits.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No habits yet. Add one to start tracking!</p>
                 ) : (
                   habits.map((habit) => (
@@ -377,7 +539,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-2 max-h-[350px] overflow-y-auto">
-                {bookmarks.length === 0 ? (
+                {bookmarksLoading ? (
+                  <p className="text-muted-foreground text-center py-8">Loading bookmarks...</p>
+                ) : bookmarks.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No bookmarks yet. Add your favorite resources!</p>
                 ) : (
                   bookmarks.map((bookmark) => (

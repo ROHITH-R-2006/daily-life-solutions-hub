@@ -1,13 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Phone, MapPin, Search, MessageSquare, Send, AlertCircle, Hospital, ShieldAlert, Wrench, Users } from "lucide-react"
+import { Phone, MapPin, Search, MessageSquare, Send, AlertCircle, Hospital, ShieldAlert } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "sonner"
+
+interface CommunityPost {
+  id: number
+  author: string
+  title: string
+  content: string
+  category: string
+  createdAt: string
+}
 
 export default function ConnectPage() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -19,6 +29,29 @@ export default function ConnectPage() {
     message: ""
   })
   const [formSubmitted, setFormSubmitted] = useState(false)
+  const [formSubmitting, setFormSubmitting] = useState(false)
+  
+  const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([])
+  const [postsLoading, setPostsLoading] = useState(true)
+
+  useEffect(() => {
+    fetchCommunityPosts()
+  }, [])
+
+  const fetchCommunityPosts = async () => {
+    try {
+      setPostsLoading(true)
+      const response = await fetch("/api/community-posts?limit=100")
+      if (response.ok) {
+        const data = await response.json()
+        setCommunityPosts(data)
+      }
+    } catch (error) {
+      toast.error("Failed to load community posts")
+    } finally {
+      setPostsLoading(false)
+    }
+  }
 
   const emergencyContacts = [
     { name: "Emergency Services", number: "911", description: "Police, Fire, Medical emergencies", icon: AlertCircle, color: "text-red-500" },
@@ -84,41 +117,6 @@ export default function ConnectPage() {
     },
   ]
 
-  const communityPosts = [
-    {
-      id: 1,
-      author: "Sarah Johnson",
-      title: "Community Garden Volunteers Needed",
-      content: "We're looking for volunteers to help maintain our community garden this spring. All skill levels welcome!",
-      category: "Volunteer",
-      timestamp: "2 hours ago"
-    },
-    {
-      id: 2,
-      author: "Mike Peterson",
-      title: "Free Tutoring Services Available",
-      content: "Offering free math and science tutoring for middle school students. Sessions available on weekends.",
-      category: "Education",
-      timestamp: "5 hours ago"
-    },
-    {
-      id: 3,
-      author: "Community Center",
-      title: "Weekly Fitness Classes Starting",
-      content: "Join us for yoga, pilates, and cardio classes every Monday, Wednesday, and Friday at 6 PM.",
-      category: "Health",
-      timestamp: "1 day ago"
-    },
-    {
-      id: 4,
-      author: "Local Food Bank",
-      title: "Food Drive This Weekend",
-      content: "Help us collect non-perishable food items for families in need. Drop-off at City Hall Saturday 9 AM-5 PM.",
-      category: "Community",
-      timestamp: "2 days ago"
-    },
-  ]
-
   const categories = ["all", "Healthcare", "Education", "Automotive", "Recreation", "Legal"]
 
   const filteredServices = localServices.filter(service => {
@@ -128,14 +126,47 @@ export default function ConnectPage() {
     return matchesSearch && matchesCategory
   })
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Simulate form submission
-    setFormSubmitted(true)
-    setTimeout(() => {
-      setFormSubmitted(false)
-      setFormData({ name: "", email: "", subject: "", message: "" })
-    }, 3000)
+    
+    try {
+      setFormSubmitting(true)
+      const response = await fetch("/api/contact-submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      })
+      
+      if (response.ok) {
+        setFormSubmitted(true)
+        toast.success("Message sent successfully!")
+        setTimeout(() => {
+          setFormSubmitted(false)
+          setFormData({ name: "", email: "", subject: "", message: "" })
+        }, 3000)
+      } else {
+        const error = await response.json()
+        toast.error(error.error || "Failed to send message")
+      }
+    } catch (error) {
+      toast.error("Failed to send message")
+    } finally {
+      setFormSubmitting(false)
+    }
+  }
+
+  const getTimeAgo = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInMs = now.getTime() - date.getTime()
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60))
+    const diffInDays = Math.floor(diffInHours / 24)
+    
+    if (diffInHours < 24) {
+      return `${diffInHours} hour${diffInHours !== 1 ? 's' : ''} ago`
+    } else {
+      return `${diffInDays} day${diffInDays !== 1 ? 's' : ''} ago`
+    }
   }
 
   return (
@@ -297,7 +328,7 @@ export default function ConnectPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Users className="w-5 h-5" />
+                    <MessageSquare className="w-5 h-5" />
                     Community Board
                   </CardTitle>
                   <CardDescription>
@@ -307,26 +338,40 @@ export default function ConnectPage() {
               </Card>
 
               <div className="space-y-4">
-                {communityPosts.map((post) => (
-                  <Card key={post.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h3 className="font-semibold text-lg mb-1">{post.title}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Posted by {post.author} • {post.timestamp}
-                          </p>
-                        </div>
-                        <Badge variant="secondary">{post.category}</Badge>
-                      </div>
-                      <p className="text-muted-foreground mb-4">{post.content}</p>
-                      <Button variant="outline" size="sm">
-                        <MessageSquare className="w-4 h-4 mr-2" />
-                        Contact
-                      </Button>
+                {postsLoading ? (
+                  <Card>
+                    <CardContent className="p-8 text-center text-muted-foreground">
+                      Loading community posts...
                     </CardContent>
                   </Card>
-                ))}
+                ) : communityPosts.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8 text-center text-muted-foreground">
+                      No community posts yet
+                    </CardContent>
+                  </Card>
+                ) : (
+                  communityPosts.map((post) => (
+                    <Card key={post.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-6">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-semibold text-lg mb-1">{post.title}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              Posted by {post.author} • {getTimeAgo(post.createdAt)}
+                            </p>
+                          </div>
+                          <Badge variant="secondary">{post.category}</Badge>
+                        </div>
+                        <p className="text-muted-foreground mb-4">{post.content}</p>
+                        <Button variant="outline" size="sm">
+                          <MessageSquare className="w-4 h-4 mr-2" />
+                          Contact
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
               </div>
 
               <Card className="bg-primary/5 border-primary/20">
@@ -412,9 +457,9 @@ export default function ConnectPage() {
                         />
                       </div>
 
-                      <Button type="submit" className="w-full" size="lg">
+                      <Button type="submit" className="w-full" size="lg" disabled={formSubmitting}>
                         <Send className="w-4 h-4 mr-2" />
-                        Send Message
+                        {formSubmitting ? "Sending..." : "Send Message"}
                       </Button>
                     </form>
                   )}
